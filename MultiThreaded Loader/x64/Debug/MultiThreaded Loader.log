@@ -1,3 +1,2 @@
 ﻿  main.cpp
-C:\Users\dizon\Downloads\Assessment 2_ MultiThreaded Loader Starting Template\MultiThreaded Loader\main.cpp(96,10): warning C4101: '_wsFileToOpen': unreferenced local variable
-  MultiThreaded Loader.vcxproj -> C:\Users\dizon\Downloads\Assessment 2_ MultiThreaded Loader Starting Template\x64\Debug\MultiThreaded Loader.exe
+  MultiThreaded Loader.vcxproj -> C:\Users\dizon\Documents\GitHub\ImageLoader\x64\Debug\MultiThreaded Loader.exe

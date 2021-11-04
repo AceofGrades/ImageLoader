@@ -1,4 +1,3 @@
-
 #include <Windows.h>
 #include <vector>
 #include <string>
@@ -12,10 +11,10 @@ const unsigned int _kuiWINDOWHEIGHT = 1200;
 
 //Global Variables
 std::vector<std::wstring> g_vecImageFileNames;
-std::vector<std::wstring> g_vecSoundFileNames;
 HINSTANCE g_hInstance;
 bool g_bIsFileLoaded = false;
 
+// Populates g_vecImageFileNames
 bool ChooseImageFilesToLoad(HWND _hwnd)
 {
 	OPENFILENAME ofn;
@@ -32,7 +31,7 @@ bool ChooseImageFilesToLoad(HWND _hwnd)
 	ofn.lStructSize = sizeof(OPENFILENAME);
 	ofn.hwndOwner = _hwnd;
 	ofn.lpstrFile = wsFileNames;
-	ofn.nMaxFile = MAX_FILES_TO_OPEN * 20 + MAX_PATH;  //The size, in charactesr of the buffer pointed to by lpstrFile. The buffer must be atleast 256(MAX_PATH) characters long; otherwise GetOpenFileName and 
+	ofn.nMaxFile = MAX_FILES_TO_OPEN * 20 + MAX_PATH;  //The size, in characters of the buffer pointed to by lpstrFile. The buffer must be atleast 256(MAX_PATH) characters long; otherwise GetOpenFileName and 
 													   //GetSaveFileName functions return False
 													   // Set lpstrFile[0] to '\0' so that GetOpenFileName does not 
 													   // use the contents of wsFileNames to initialize itself.
@@ -86,61 +85,7 @@ bool ChooseImageFilesToLoad(HWND _hwnd)
 
 }
 
-bool ChooseSoundFilesToLoad(HWND _hwnd)
-{
-	OPENFILENAME ofn;
-	SecureZeroMemory(&ofn, sizeof(OPENFILENAME)); // Better to use than ZeroMemory
-	wchar_t wsFileNames[MAX_FILES_TO_OPEN * MAX_CHARACTERS_IN_FILENAME + MAX_PATH]; //The string to store all the filenames selected in one buffer togther with the complete path name.
-	wchar_t _wsPathName[MAX_PATH + 1];
-	wchar_t _wstempFile[MAX_PATH + MAX_CHARACTERS_IN_FILENAME]; //Assuming that the filename is not more than 20 characters
-	wchar_t _wsFileToOpen[MAX_PATH + MAX_CHARACTERS_IN_FILENAME];
-	ZeroMemory(wsFileNames, sizeof(wsFileNames));
-	ZeroMemory(_wsPathName, sizeof(_wsPathName));
-	ZeroMemory(_wstempFile, sizeof(_wstempFile));
-
-	//Fill out the fields of the structure
-	ofn.lStructSize = sizeof(OPENFILENAME);
-	ofn.hwndOwner = _hwnd;
-	ofn.lpstrFile = wsFileNames;
-	ofn.nMaxFile = MAX_FILES_TO_OPEN * 20 + MAX_PATH;  //The size, in charactesr of the buffer pointed to by lpstrFile. The buffer must be atleast 256(MAX_PATH) characters long; otherwise GetOpenFileName and 
-													   //GetSaveFileName functions return False
-													   // Set lpstrFile[0] to '\0' so that GetOpenFileName does not 
-													   // use the contents of wsFileNames to initialize itself.
-	ofn.lpstrFile[0] = '\0';
-	ofn.lpstrFilter = L"Wave Files (*.wav)\0*.wav\0All Files (*.*)\0*.*\0"; //Filter for wav files
-	ofn.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_FILEMUSTEXIST | OFN_ALLOWMULTISELECT;
-
-	//If the user makes a selection from the  open dialog box, the API call returns a non-zero value
-	if (GetOpenFileName(&ofn) != 0) //user made a selection and pressed the OK button
-	{
-		//Extract the path name from the wide string -  two ways of doing it
-		//Second way: work with wide strings and a char pointer 
-
-		std::wstring _wstrPathName = ofn.lpstrFile;
-
-		_wstrPathName.resize(ofn.nFileOffset, '\\');
-
-		wchar_t *_pwcharNextFile = &ofn.lpstrFile[ofn.nFileOffset];
-
-		while (*_pwcharNextFile)
-		{
-			std::wstring _wstrFileName = _wstrPathName + _pwcharNextFile;
-
-			g_vecSoundFileNames.push_back(_wstrFileName);
-
-			_pwcharNextFile += lstrlenW(_pwcharNextFile) + 1;
-		}
-
-		g_bIsFileLoaded = true;
-		return true;
-	}
-	else // user pressed the cancel button or closed the dialog box or an error occured
-	{
-		return false;
-	}
-
-}
-
+// Window shows what is happening
 LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lparam)
 {
 	PAINTSTRUCT ps;
@@ -163,7 +108,7 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 		}
 	}
 	break;
-	case WM_PAINT:
+	case WM_PAINT: // Paint happens every time you render the window
 	{
 
 		_hWindowDC = BeginPaint(_hwnd, &ps);
@@ -183,26 +128,33 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 		{
 			if (ChooseImageFilesToLoad(_hwnd))
 			{
-				//Write code here to create multiple threads to load image files in parallel
+				// All image file paths
+				for (int imgFileNameIndex = 0; imgFileNameIndex < g_vecImageFileNames.size(); ++imgFileNameIndex)
+				{
+					// Load the image
+					std::wstring imgFileName = g_vecImageFileNames[imgFileNameIndex];
+					HBITMAP loadedImage = (HBITMAP)LoadImageW(NULL, imgFileName.c_str(), IMAGE_BITMAP, 100, 100, LR_LOADFROMFILE);
+					bool loadFailed = loadedImage == NULL;
+					if (loadFailed)
+					{
+						throw "Load failed.";
+					}
+
+					// Then, render it
+					HDC hdc = GetDC(_hwnd);
+					HBRUSH brush = CreatePatternBrush(loadedImage);
+					RECT rect;
+					bool success = SetRect(&rect, 100 * imgFileNameIndex, 0, 100 * imgFileNameIndex + 100, 100);
+					int fillRectSuccess = FillRect(hdc, &rect, brush);
+					success = DeleteObject(brush);
+					int releaseDC = ReleaseDC(_hwnd, hdc);
+				}
 			}
 			else
 			{
 				MessageBox(_hwnd, L"No Image File selected", L"Error Message", MB_ICONWARNING);
 			}
 
-			return (0);
-		}
-		break;
-		case ID_FILE_LOADSOUND:
-		{
-			if (ChooseSoundFilesToLoad(_hwnd))
-			{
-				//Write code here to create multiple threads to load sound files in parallel
-			}
-			else
-			{
-				MessageBox(_hwnd, L"No Sound File selected", L"Error Message", MB_ICONWARNING);
-			}
 			return (0);
 		}
 		break;
