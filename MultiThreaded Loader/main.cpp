@@ -1,6 +1,9 @@
 #include <Windows.h>
 #include <vector>
 #include <string>
+#include <thread>
+#include <mutex>
+#include <chrono>
 #include "resource.h"
 
 #define WINDOW_CLASS_NAME L"MultiThreaded Loader Tool"
@@ -82,7 +85,24 @@ bool ChooseImageFilesToLoad(HWND _hwnd)
 	{
 		return false;
 	}
+}
 
+std::mutex imgVectorLock;
+std::vector<HBITMAP> g_vecLoadedImages;
+// Load images into g_vecLoadedImages
+void imgLoad(std::wstring filePath)
+{
+	HBITMAP loadedImage = (HBITMAP)LoadImageW(NULL, filePath.c_str(), IMAGE_BITMAP, 100, 100, LR_LOADFROMFILE);
+	bool loadFailed = loadedImage == NULL;
+	if (loadFailed)
+	{
+		throw "Load failed.";
+	}
+
+	// Locks the write
+	imgVectorLock.lock();
+	g_vecLoadedImages.push_back(loadedImage);
+	imgVectorLock.unlock();
 }
 
 // Window shows what is happening
@@ -128,22 +148,28 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 		{
 			if (ChooseImageFilesToLoad(_hwnd))
 			{
+				std::vector<std::thread> threadPool;
+				// Load the images
+				for (int imgFileNameIndex = 0; imgFileNameIndex < g_vecImageFileNames.size(); ++imgFileNameIndex)
+				{
+					std::wstring imgFileName = g_vecImageFileNames[imgFileNameIndex];
+					threadPool.push_back(std::thread(imgLoad, imgFileName));
+				}
+				// Waits for threads to complete. Then, images are loaded
+				for (int threadIndex = 0; threadIndex < threadPool.size(); ++threadIndex)
+				{
+					threadPool[threadIndex].join();
+				}
+
 				// All image file paths
 				for (int imgFileNameIndex = 0; imgFileNameIndex < g_vecImageFileNames.size(); ++imgFileNameIndex)
 				{
-					// Load the image
-					std::wstring imgFileName = g_vecImageFileNames[imgFileNameIndex];
-					HBITMAP loadedImage = (HBITMAP)LoadImageW(NULL, imgFileName.c_str(), IMAGE_BITMAP, 100, 100, LR_LOADFROMFILE);
-					bool loadFailed = loadedImage == NULL;
-					if (loadFailed)
-					{
-						throw "Load failed.";
-					}
-
+					HBITMAP loadedImage = g_vecLoadedImages[imgFileNameIndex];
 					// Then, render it
 					HDC hdc = GetDC(_hwnd);
 					HBRUSH brush = CreatePatternBrush(loadedImage);
 					RECT rect;
+					rect.left = 0;
 					bool success = SetRect(&rect, 100 * imgFileNameIndex, 0, 100 * imgFileNameIndex + 100, 100);
 					int fillRectSuccess = FillRect(hdc, &rect, brush);
 					success = DeleteObject(brush);
